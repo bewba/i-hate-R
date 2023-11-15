@@ -19,7 +19,7 @@ OUTTIME <- 1800 # nolint
 RATES <- c(1, 1.30, 1.50, 2, 2.60) # nolint
 OT_RATES <- c(1.25, 1.69, 1.95, 2.60, 3.38) # nolint
 OT_NS_RATES <- c(1.375, 1.859, 2.145, 2.86, 3.718) # nolint
-weekly_Pay <- c()
+weekly_Pay <- c(0.0,0.0,0.0,0.0,0.0,0.0,0.0)
 DAYS <- c( # nolint
   "Sunday", "Monday", "Tuesday", "Wednesday",
   "Thursday", "Friday", "Saturday"
@@ -202,11 +202,6 @@ print_configuration <- function() {
   flush.console()
 }
 
-pay_by_hours <- function(hours) {
-  print("nigger")
-  print(hours)
-}
-
 
 get_hours_worked <- function() {
   tryCatch(
@@ -274,21 +269,20 @@ compute_night_int <- function(start, end) {
   for (i in 0:1439) {
     x <- x %% 2400
     if (is_within(x, start, end) && x != end) {
-
-        if (is_within(x, 600, 2159)) {
-          if (mins_worked - 60 < normal_rate_mins) {
-            day_mins <- day_mins + 1
-          } else {
-            ot_day_mins <- ot_day_mins + 1
-          }
+      if (is_within(x, 600, 2159)) {
+        if (mins_worked - 60 < normal_rate_mins) {
+          day_mins <- day_mins + 1
         } else {
-          if (mins_worked - 60 < normal_rate_mins) {
-            night_mins <- night_mins + 1
-          } else {
-            ot_night_mins <- ot_night_mins + 1
-          }
+          ot_day_mins <- ot_day_mins + 1
         }
-      
+      } else {
+        if (mins_worked - 60 < normal_rate_mins) {
+          night_mins <- night_mins + 1
+        } else {
+          ot_night_mins <- ot_night_mins + 1
+        }
+      }
+
       mins_worked <- mins_worked + 1
     }
     x <- x + 1
@@ -326,9 +320,9 @@ take_day_type <- function(day) {
 # p2 is day_hours overtime
 # p3 is Night hours
 # p4 is Night hours overtime
-payments_computations <- function(p1, p2, p3, p4, day) {
+payments_computations <- function(p1, p2, p3, p4, days) {
   hourly_rate <- DAILY_SALARY / MAXIMUM_REGULAR_HOURS
-  day_type <- take_day_type(day)
+  day_type <- take_day_type(days)
 
   base <- 0
 
@@ -344,18 +338,20 @@ payments_computations <- function(p1, p2, p3, p4, day) {
   # add by night overtime
   ot_night_pay <- base + (hourly_rate * p4 * OT_NS_RATES[day_type])
 
-  full_pay <- round(hour_pay + ot_hour_pay + night_pay + ot_night_pay,2)
-
-  day <- sprintf("Day Computation: %d * %.2f = %.2f\n", p1, RATES[day_type], hour_pay) #nolint
-  ot_day <- sprintf("OT Day Computation: %d * %.2f= %.2f\n", p2, OT_RATES[day_type], ot_hour_pay)#nolint
-  night <- sprintf("Night Computation: %d * %.2f * 1.1 = %.2f\n", p3, RATES[day_type], night_pay)#nolint
-  ot_night <- sprintf("OT Night Computation: %d * %.2f = %.2f\n", p4, OT_NS_RATES[day_type], ot_night_pay)#nolint
-  pay <- sprintf("%.2f + %.2f + %.2f + %.2f = %.2f\n", hour_pay, ot_hour_pay, night_pay, ot_night_pay, full_pay)#nolint
+  full_pay <- round(hour_pay + ot_hour_pay + night_pay + ot_night_pay, 2)
+  day <- sprintf("Day Computation: %d * %.2f = %.2f\n", p1, RATES[day_type], hour_pay) # nolint
+  ot_day <- sprintf("OT Day Computation: %d * %.2f= %.2f\n", p2, OT_RATES[day_type], ot_hour_pay) # nolint
+  night <- sprintf("Night Computation: %d * %.2f * 1.1 = %.2f\n", p3, RATES[day_type], night_pay) # nolint
+  ot_night <- sprintf("OT Night Computation: %d * %.2f = %.2f\n", p4, OT_NS_RATES[day_type], ot_night_pay) # nolint
+  pay <- sprintf("%.2f + %.2f + %.2f + %.2f = %.2f\n", hour_pay, ot_hour_pay, night_pay, ot_night_pay, full_pay) # nolint
   cat(day)
   cat(ot_day)
   cat(night)
   cat(ot_night)
   cat(pay)
+  
+  weekly_Pay[days] <<- full_pay
+  
   return(full_pay)
 }
 
@@ -366,18 +362,19 @@ compute_pay <- function(day) {
   while (is_valid[1] == FALSE) {
     is_valid <- get_hours_worked()
   }
-  
+
   hours <- is_valid[2]
   out_time <- is_valid[3]
 
-  if (hours == 0){
-    if(RESTDAYS[day] == 1){
+  if (hours == 0) {
+    if (RESTDAYS[day] == 1) {
       absent_prompt <- sprintf("You are paid %.2f\n", DAILY_SALARY)
+      weekly_Pay[day] <<- DAILY_SALARY
     } else {
       absent_prompt <- sprintf("ABSENT! NO PAY!\n")
     }
     cat(absent_prompt)
-    return (TRUE)
+    return(TRUE)
   }
 
   mins_worked <- compute_night_int(as.integer(INTIME), as.integer(out_time))
@@ -391,9 +388,9 @@ compute_pay <- function(day) {
   cat(paste("Day Hours Overtime", day_hours_ot, "\n"))
   cat(paste("Night Hours", night_hours, "\n"))
   cat(paste("Night Hours Overtime", night_hours_ot, "\n"))
+  payments_computations(day_hours,day_hours_ot,night_hours,night_hours_ot,day)
   cat("\n")
   cat("\n")
-  print(payments_computations(day_hours, day_hours_ot, night_hours, night_hours_ot, day))
   return(TRUE)
 }
 
@@ -402,7 +399,7 @@ main <- function() {
   flush.console()
   exit <- 0
   day <- 1
-  while (exit == 0) {
+  while (exit == 0 && day != 8) {
     tryCatch(
       expr = {
         choice <- readline(prompt = print_menu(day))
@@ -431,10 +428,16 @@ main <- function() {
         invalid_prompt()
       }
     )
-    if (day == 8) {
-      day <- 1
-    }
+
   }
+    day_pay <- 0
+      for (i in 1:7) {
+        printer <- sprintf("%s: %.2f\n", DAYS[i], weekly_Pay[i])
+        cat(printer)
+        day_pay <- weekly_Pay[i] + day_pay
+      }
+      cat(paste("You have earned :", day_pay, " this week!\n"))
+  
 }
 
 main()
